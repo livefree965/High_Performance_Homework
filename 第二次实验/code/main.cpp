@@ -90,12 +90,10 @@ int main(int argc, char *argv[])
 {
 	string mat_a = "a.mtx";
 	string mat_b = "b.mtx";
-	generate_mat(mat_a, 3, 4,2);
-	generate_mat(mat_b, 4, 3, 3);
+	generate_mat(mat_a, 4, 3, 2);
+	generate_mat(mat_b, 3, 4, 3);
 	double** vec_data = get_mat(mat_b);
 	double** mat_data = get_mat(mat_a);
-	show_mat(mat_a);
-	show_mat(mat_b);
 	int mat_size[2], vec_size[2];
 	update_info(mat_b, vec_size);
 	update_info(mat_a, mat_size);
@@ -105,6 +103,7 @@ int main(int argc, char *argv[])
 			res[row][col] = 0;
 		}
 	}
+	/*
 	printf("Res: \n");
 	for (int row = 0; row < mat_size[0]; row++) {
 		for (int col = 0; col < vec_size[1]; col++) {
@@ -115,36 +114,56 @@ int main(int argc, char *argv[])
 		}
 		printf("\n");
 	}
-	/*
+	*/
 	int my_rank, comm_size;
 	MPI_Init(&argc, &argv);
+	double beg = MPI_Wtime();
 	MPI_Comm_rank(MPI_COMM_WORLD, &my_rank);
 	MPI_Comm_size(MPI_COMM_WORLD, &comm_size);
 	int part = mat_size[0] / comm_size;
-	for (int row = my_rank*part; row < my_rank*(part+1); row++) {
-		for (int col = 0; col < vec_size[1]; col++) {
-			for (int inner = 0; inner < mat_size[1]; inner++) {
-				res[row][col] += mat_data[row][inner] * vec_data[inner][col];
-			}
-			printf("%lf ", res[row][col]);
-		}
-		printf("\n");
-	}
 	if (my_rank != 0) {
-		for (int row = my_rank * part; row < my_rank*(part + 1); row++) {
-			MPI_Send(res[row], mat_size[1], MPI_DOUBLE, 0, 0, MPI_COMM_WORLD);
+		for (int row = my_rank * part; row < (my_rank+1)*part; row++) {
+			for (int col = 0; col < vec_size[1]; col++) {
+				for (int inner = 0; inner < mat_size[1]; inner++) {
+					res[row][col] += mat_data[row][inner] * vec_data[inner][col];
+				}
+			}
+		}
+		for (int row = my_rank * part; row < (my_rank+1)*part; row++) {
+			MPI_Send(res[row], vec_size[1], MPI_DOUBLE, 0, 0, MPI_COMM_WORLD);
 		}
 	}
 	else
 	{
+		for (int row = my_rank * part; row < (my_rank + 1)*part; row++) {
+			for (int col = 0; col < vec_size[1]; col++) {
+				for (int inner = 0; inner < mat_size[1]; inner++) {
+					res[row][col] += mat_data[row][inner] * vec_data[inner][col];
+				}
+			}
+		}
+		printf("rows :%d\n", mat_size[0]);
+		printf("Core for row :%d\n", part);
+		show_mat(mat_a);
+		show_mat(mat_b);
 		for (int i = 1; i < comm_size; i++)
 		{
-			for (int row = i * part; row < i*(part + 1); row++) {
-				MPI_Recv(res[row], mat_size[1], MPI_DOUBLE, i, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+			for (int row = i * part; row < (i+1)*part; row++) {
+				MPI_Recv(res[row], vec_size[1], MPI_DOUBLE, i, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
 			}
 		}
 	}
-	*/
+	if (my_rank==0)
+	{
+		printf("Res: \n");
+		for (int row = 0; row < mat_size[0]; row++) {
+			for (int col = 0; col < vec_size[1]; col++) {
+				printf("%lf ", res[row][col]);
+			}
+			printf("\n");
+		}
+		printf("Time use : %lf\n", MPI_Wtime() - beg);
+	}
 	/*
 	double beg = MPI_Wtime();
 	double a, b, h;
@@ -201,6 +220,7 @@ int main(int argc, char *argv[])
 
 	MPI_Finalize();
 	*/
+	MPI_Finalize();
 	return 0;
 }
 
