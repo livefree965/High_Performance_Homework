@@ -32,10 +32,10 @@ double get_element(char *src, int *res) {
     char *p;
     p = strtok(src, d);
     for (int i = 0; i < 2; i++) {
-        res[i] = atoi(p);
+        res[i] = strtol(p, NULL,10);
         p = strtok(NULL, d);
     }
-    return atof(p);
+    return strtod(p, NULL);
 }
 
 void update_info(const string &filename, int *res) {
@@ -59,42 +59,31 @@ map<int, map<int, double >> get_mat(const string &filename) {
     map<int, map<int, double >> mat_data;
     while (!infile.eof()) {
         infile.getline(buffer, 256, '\n');
-        mat_data[element[0] - 1][element[1] - 1] = get_element(buffer, element);
+        double data = get_element(buffer, element);
+        mat_data[element[0] - 1][element[1] - 1] = data;
     }
     infile.close();
     return mat_data;
 }
 
-void show_mat(const string &filename) {
-    ifstream infile;
-    char buffer[256];
-    infile.open(filename);
-    infile.getline(buffer, 256, '\n');
-    int temp[3];
-    get_element(buffer, temp);
-    int row = temp[0];
-    int col = temp[1];
-    cout << filename << " ";
-    printf("size: %d*%d\n", row, col);
-    for (int i = 0; i < row; i++) {
-        for (int j = 0; j < col; j++) {
-            infile.getline(buffer, 256, '\n');
-            printf("%f ", get_element(buffer, temp));
+void show_mat(map<int, map<int, double >> mat) {
+    for (map<int, map<int, double> >::iterator i = mat.begin(); i != mat.end(); i++) {
+        for (map<int, double>::iterator j = (i->second).begin(); j != (i->second).end(); j++) {
+            cout << j->second << ends;
         }
-        printf("\n");
+        cout << endl;
     }
-    infile.close();
 }
 
 int main(int argc, char *argv[]) {
-    string mat_a = "mat_data.mtx";
-    string mat_b = "vec_data.mtx";
+    string mat_a = "test_mat.mtx";
+    string mat_b = "test_vec.mtx";
     map<int, map<int, double >> vec_data = get_mat(mat_b);
     map<int, map<int, double >> mat_data = get_mat(mat_a);
     int mat_size[2], vec_size[2];
     update_info(mat_b, vec_size);
     update_info(mat_a, mat_size);
-    map<int, map<int, double >>res;
+    map<int, map<int, double >> res;
     for (int row = 0; row < mat_size[0]; row++) {
         for (int col = 0; col < vec_size[1]; col++) {
             for (int inner = 0; inner < mat_size[1]; inner++) {
@@ -102,6 +91,7 @@ int main(int argc, char *argv[]) {
             }
         }
     }
+    show_mat(res);
     /*
     printf("Res: \n");
     for (int row = 0; row < mat_size[0]; row++) {
