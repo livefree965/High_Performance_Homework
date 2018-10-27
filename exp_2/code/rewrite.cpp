@@ -7,7 +7,7 @@
 #include <random>
 #include <vector>
 #include <string.h>
-//#include <mpi.h>
+#include <mpi.h>
 #include <map>
 
 using namespace std;
@@ -107,7 +107,6 @@ Mat_Data get_mat(const string &filename) {
         mat_data.idx[element[0] - 1]->push_back(element[1] - 1);
         mat_data.val[element[0] - 1]->push_back(data);
     }
-    mat_data.show_array();
     infile.close();
     return mat_data;
 }
@@ -139,88 +138,68 @@ int main(int argc, char *argv[]) {
     int mat_size[2], vec_size[2];
     update_info(mat_b, vec_size);
     update_info(mat_a, mat_size);
-    Mat_Data res(mat_size[0], mat_size[0]);
+    double *res = new double[mat_size[0]];
 //    serial verison
-    for (int row = 0; row < mat_size[0]; row++) {
-        for (int inner = 0; inner < mat_data.idx[row]->size(); inner++) {
-            if (res.val[row]->empty())
-                res.val[row]->push_back((*mat_data.val[row])[inner] * (*vec_data.val[(*mat_data.idx[row])[inner]])[0]);
-            else
-                (*res.val[row])[0] += ((*mat_data.val[row])[inner] * (*vec_data.val[(*mat_data.idx[row])[inner]])[0]);
+//    for (int row = 0; row < mat_size[0]; row++) {
+//        for (int inner = 0; inner < mat_data.idx[row]->size(); inner++) {
+//            if (inner == 0)
+//                res[row] = (*mat_data.val[row])[inner] * (*vec_data.val[(*mat_data.idx[row])[inner]])[0];
+//            else
+//                res[row] += (*mat_data.val[row])[inner] * (*vec_data.val[(*mat_data.idx[row])[inner]])[0];
+//        }
+//    }
+//    for (int j = 0; j < mat_size[0]; ++j) {
+//        cout << res[j] << ' ';
+//    }
+    int my_rank, comm_size;
+    MPI_Init(&argc, &argv);
+    double beg = MPI_Wtime();
+    MPI_Comm_rank(MPI_COMM_WORLD, &my_rank);
+    MPI_Comm_size(MPI_COMM_WORLD, &comm_size);
+    int part = mat_size[0] / comm_size;
+    if (part == 0)
+        part++;
+    if (my_rank != 0) {
+        int row_end = (my_rank + 2) * part >= mat_size[0] ? mat_size[0] : (my_rank + 1) * part;
+        for (int row = my_rank * part; row < row_end; row++) {
+            for (int inner = 0; inner < mat_data.idx[row]->size(); inner++) {
+                if (inner == 0)
+                    res[row] = (*mat_data.val[row])[inner] * (*vec_data.val[(*mat_data.idx[row])[inner]])[0];
+                else
+                    res[row] += (*mat_data.val[row])[inner] * (*vec_data.val[(*mat_data.idx[row])[inner]])[0];
+            }
+        }
+        for (int row = my_rank * part; row < row_end; row++) {
+            MPI_Send(&res[row], mat_size[1], MPI_DOUBLE, 0, 0, MPI_COMM_WORLD);
+        }
+    } else {
+        printf("Rows :%d\n", mat_size[0]);
+        printf("Core %d for row :%d-%d\n", my_rank, my_rank * part, (my_rank + 1) * part);
+        for (int row = my_rank * part; row < (my_rank + 1) * part; row++) {
+            for (int inner = 0; inner < mat_data.idx[row]->size(); inner++) {
+                if (inner == 0)
+                    res[row] = (*mat_data.val[row])[inner] * (*vec_data.val[(*mat_data.idx[row])[inner]])[0];
+                else
+                    res[row] += (*mat_data.val[row])[inner] * (*vec_data.val[(*mat_data.idx[row])[inner]])[0];
+            }
+        }
+        double temp;
+        for (int i = 1; i < comm_size; i++) {
+            int row_end = (i + 2) * part >= mat_size[0] ? mat_size[0] : (i + 1) * part;
+            printf("Core %d for row :%d-%d\n", i, i * part, row_end);
+            for (int row = i * part; row < row_end; row++) {
+                MPI_Recv(&res[row], mat_size[1], MPI_DOUBLE, i, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+            }
         }
     }
-    res.show_array();
-//    show_mat(res);
-//    cout << "read_finish" << endl;
-//    int my_rank, comm_size;
-//    MPI_Init(&argc, &argv);
-//    double beg = MPI_Wtime();
-//    MPI_Comm_rank(MPI_COMM_WORLD, &my_rank);
-//    MPI_Comm_size(MPI_COMM_WORLD, &comm_size);
-//    int part = mat_size[0] / comm_size;
-//    if (part == 0)
-//        part++;
-//    if (my_rank != 0) {
-//        int row_end = (my_rank + 2)*part >= mat_size[0] ? mat_size[0] : (my_rank + 1)*part;
-//        for (int row = my_rank * part; row < row_end; row++) {
-//            for (int col = 0; col < vec_size[1]; col++) {
-//                for (int inner = 0; inner < mat_size[1]; inner++) {
-//                    res[row][col] += mat_data[row][inner] * vec_data[inner][col];
-//                }
-//            }
-//        }
-//        double temp;
-//        for (int row = my_rank * part; row < row_end; row++) {
-//            for (int col = 0; col < vec_size[1]; col++)
-//            {
-//                cout << "send" << endl;
-//                MPI_Send(&res[row][col], 1, MPI_DOUBLE, 0, 0, MPI_COMM_WORLD);
-//            }
-//        }
-//    }
-//    else
-//    {
-//        printf("Rows :%d\n", mat_size[0]);
-//        printf("Core %d for row :%d-%d\n", my_rank, my_rank*part, (my_rank + 1)*part);
-//        for (int row = my_rank * part; row < (my_rank + 1)*part; row++) {
-//            cout << "row " << row << " finish" << endl;
-//            for (int col = 0; col < vec_size[1]; col++) {
-//                for (int inner = 0; inner < mat_size[1]; inner++) {
-//                    res[row][col] += mat_data[row][inner] * vec_data[inner][col];
-//                }
-//            }
-//        }
-//        //show_mat(mat_a);
-//        //show_mat(mat_b);
-//        double temp;
-//        for (int i = 1; i < comm_size; i++)
-//        {
-//            int row_end = (i + 2)*part >= mat_size[0] ? mat_size[0] : (i + 1)*part;
-//            printf("Core %d for row :%d-%d\n", i, i*part, row_end);
-//            for (int row = i * part; row < row_end; row++) {
-//                for (int col = 0; col < vec_size[1]; col++)
-//                {
-//                    cout << "recv" << endl;
-//                    MPI_Recv(&temp, 1, MPI_DOUBLE, i, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-//                    res[row][col] = temp;
-//                }
-//
-//            }
-//        }
-//    }
-//    if (my_rank == 0)
-//    {
-//        printf("Res: \n");
-//        for (int row = 0; row < mat_size[0]; row++) {
-//            for (int col = 0; col < vec_size[1]; col++) {
-//                printf("%lf ", res[row][col]);
-//            }
-//            printf("\n");
-//        }
-//        printf("Time use : %lf\n", MPI_Wtime() - beg);
-//        save_mat(res, mat_size[0], vec_size[1]);
-//    }
-//    MPI_Finalize();
+    if (my_rank == 0) {
+        printf("Res: \n");
+        for (int row = 0; row < mat_size[0]; row++) {
+            printf("%lf \n", res[row]);
+        }
+        printf("Time use : %lf\n", MPI_Wtime() - beg);
+    }
+    MPI_Finalize();
     return 0;
 }
 
