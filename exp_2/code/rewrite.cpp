@@ -111,19 +111,12 @@ Mat_Data get_mat(const string &filename) {
     return mat_data;
 }
 
-void save_mat(map<int, map<int, double >> mat, int row, int col) {
+void save_mat(const string &filename, double *mat, int row, int col) {
     ofstream out;
-    out.open("res_mat.mtx");
-    int all_size = 0;
+    out.open(filename);
+    out << row << "\t" << col << "\t" << row << endl;
     for (int i = 0; i < row; i++) {
-        all_size += mat[i].size();
-    }
-    out << row << "\t" << col << "\t" << all_size << endl;
-    for (int i = 0; i < row; i++) {
-        for (int j = 0; j < col; j++) {
-            if (mat[i][j] != 0)
-                out << i + 1 << "\t" << j + 1 << "\t" << mat[i][j] << endl;
-        }
+        out << i + 1 << "\t" << 1 << "\t" << mat[i] << endl;
     }
     out.close();
 }
@@ -131,8 +124,10 @@ void save_mat(map<int, map<int, double >> mat, int row, int col) {
 int main(int argc, char *argv[]) {
     // string mat_a = "mat_data.mtx";
     // string mat_b = "vec_data.mtx";
-    string mat_a = "test_mat.mtx";
-    string mat_b = "test_vec.mtx";
+//    generate_mat("test1_mat.mtx", 4, 5, 1);
+//    generate_mat("tesr2_vec.mtx", 5, 1, 1);
+    string mat_a = "test1_mat.mtx";
+    string mat_b = "tesr2_vec.mtx";
     Mat_Data vec_data = get_mat(mat_b);
     Mat_Data mat_data = get_mat(mat_a);
     int mat_size[2], vec_size[2];
@@ -160,7 +155,9 @@ int main(int argc, char *argv[]) {
     if (part == 0)
         part++;
     if (my_rank != 0) {
-        int row_end = (my_rank + 2) * part >= mat_size[0] ? mat_size[0] : (my_rank + 1) * part;
+        int row_end = (my_rank + 1) * part >= mat_size[0] ? mat_size[0] : (my_rank + 1) * part;
+        if (my_rank == comm_size - 1)
+            row_end = mat_size[0];
         for (int row = my_rank * part; row < row_end; row++) {
             for (int inner = 0; inner < mat_data.idx[row]->size(); inner++) {
                 if (inner == 0)
@@ -170,7 +167,7 @@ int main(int argc, char *argv[]) {
             }
         }
         for (int row = my_rank * part; row < row_end; row++) {
-            MPI_Send(&res[row], mat_size[1], MPI_DOUBLE, 0, 0, MPI_COMM_WORLD);
+            MPI_Send(&res[row], 1, MPI_DOUBLE, 0, 0, MPI_COMM_WORLD);
         }
     } else {
         printf("Rows :%d\n", mat_size[0]);
@@ -185,10 +182,13 @@ int main(int argc, char *argv[]) {
         }
         double temp;
         for (int i = 1; i < comm_size; i++) {
-            int row_end = (i + 2) * part >= mat_size[0] ? mat_size[0] : (i + 1) * part;
+            int row_end = (i + 1) * part >= mat_size[0] ? mat_size[0] : (i + 1) * part;
+            if (i == comm_size - 1)
+                row_end = mat_size[0];
             printf("Core %d for row :%d-%d\n", i, i * part, row_end);
             for (int row = i * part; row < row_end; row++) {
-                MPI_Recv(&res[row], mat_size[1], MPI_DOUBLE, i, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+                double *temp = new double[mat_size[1]];
+                MPI_Recv(&res[row], 1, MPI_DOUBLE, i, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
             }
         }
     }
@@ -198,6 +198,7 @@ int main(int argc, char *argv[]) {
             printf("%lf \n", res[row]);
         }
         printf("Time use : %lf\n", MPI_Wtime() - beg);
+//        save_mat("res_mat.mtx", res, mat_size[0], 1);
     }
     MPI_Finalize();
     return 0;
