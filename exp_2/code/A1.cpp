@@ -88,10 +88,9 @@ void update_info(const string &filename, int *res) {
     char buffer[256];
     infile.open(filename);
     infile.getline(buffer, 256, '\n');
-    get_element(buffer, mat_info);
+    res[2] = int(get_element(buffer, mat_info));
     res[0] = mat_info[0];
     res[1] = mat_info[1];
-    res[2] = mat_info[2];
 }
 
 Mat_Data get_mat(const string &filename) {
@@ -123,42 +122,43 @@ void save_mat(const string &filename, double *mat, int row, int col) {
 }
 
 int main(int argc, char *argv[]) {
-    // string mat_a = "mat_data.mtx";
-    // string mat_b = "vec_data.mtx";
-//    generate_mat("test1_mat.mtx", 4, 5, 1);
-//    generate_mat("tesr2_vec.mtx", 5, 1, 1);
-//    string mat_a = "test1_mat.mtx";
-//    string mat_b = "tesr2_vec.mtx";
-    string mat_a = "mat_data.mtx";
-    string mat_b = "vec_data.mtx";
-    Mat_Data vec_data = get_mat(mat_b);
-    Mat_Data mat_data = get_mat(mat_a);
-    int mat_size[3], vec_size[3];
-    update_info(mat_b, vec_size);
-    update_info(mat_a, mat_size);
-    double *res = new double[mat_size[0]];
-//    serial verison
-//    for (int row = 0; row < mat_size[0]; row++) {
-//        for (int inner = 0; inner < mat_data.idx[row]->size(); inner++) {
-//            if (inner == 0)
-//                res[row] = (*mat_data.val[row])[inner] * (*vec_data.val[(*mat_data.idx[row])[inner]])[0];
-//            else
-//                res[row] += (*mat_data.val[row])[inner] * (*vec_data.val[(*mat_data.idx[row])[inner]])[0];
-//        }
-//    }
-//    for (int j = 0; j < mat_size[0]; ++j) {
-//        cout << res[j] << ' ';
-//    }
     int my_rank, comm_size;
+    int mat_size[3], vec_size[3];
+    int row, idx;
+    double val;
+    double *res;
     MPI_Init(&argc, &argv);
     double beg = MPI_Wtime();
     MPI_Comm_rank(MPI_COMM_WORLD, &my_rank);
     MPI_Comm_size(MPI_COMM_WORLD, &comm_size);
-    int part = mat_size[0] / comm_size;
     int own_beg_row, own_end_row;
-    if (part == 0)
-        part++;
     if (my_rank != 0) {
+        MPI_Recv(&mat_size, 3, MPI_INT, 0, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+//        cout << "recv" << mat_size[0] << ' ' << mat_size[1] << ' ' << mat_size[2] << endl;
+        MPI_Recv(&vec_size, 3, MPI_INT, 0, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+//        cout << "recv" << vec_size[0] << ' ' << vec_size[1] << ' ' << vec_size[2] << endl;
+        Mat_Data vec_data(vec_size[0], vec_size[0]);
+        Mat_Data mat_data(mat_size[0], mat_size[0]);
+        for (int i = 0; i < mat_size[2]; ++i) {
+            MPI_Recv(&row, 1, MPI_INT, 0, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+            MPI_Recv(&idx, 1, MPI_INT, 0, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+            MPI_Recv(&val, 1, MPI_DOUBLE, 0, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+//            cout << row << " " << idx << " " << val << endl;
+            mat_data.idx[row]->push_back(idx);
+            mat_data.val[row]->push_back(val);
+        }
+        for (int i = 0; i < vec_size[2]; ++i) {
+            MPI_Recv(&row, 1, MPI_INT, 0, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+            MPI_Recv(&idx, 1, MPI_INT, 0, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+            MPI_Recv(&val, 1, MPI_DOUBLE, 0, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+            vec_data.idx[row]->push_back(idx);
+            vec_data.val[row]->push_back(val);
+        }
+        res = new double[mat_size[0]];
+//        mat_data.show_array();
+        /*
+         * get distribute task
+         */
         MPI_Recv(&own_beg_row, 1, MPI_INT, 0, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
         MPI_Recv(&own_end_row, 1, MPI_INT, 0, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
         /*
@@ -176,6 +176,38 @@ int main(int argc, char *argv[]) {
             MPI_Send(&res[row], 1, MPI_DOUBLE, 0, 0, MPI_COMM_WORLD);
         }
     } else {
+        string mat_a = "mat_data.mtx";
+        string mat_b = "vec_data.mtx";
+        Mat_Data vec_data = get_mat(mat_b);
+        Mat_Data mat_data = get_mat(mat_a);
+        update_info(mat_b, vec_size);
+        update_info(mat_a, mat_size);
+        res = new double[mat_size[0]];
+        for (int l = 0; l < comm_size; ++l) {
+            MPI_Send(&mat_size, 3, MPI_INT, l, 0, MPI_COMM_WORLD);
+            MPI_Send(&vec_size, 3, MPI_INT, l, 0, MPI_COMM_WORLD);
+        }
+        for (int i = 0; i < mat_data.idx_size; ++i) {
+            for (int j = 0; j < mat_data.idx[i]->size(); ++j) {
+                for (int k = 0; k < comm_size; ++k) {
+                    MPI_Send(&i, 1, MPI_INT, k, 0, MPI_COMM_WORLD);
+                    MPI_Send(&(*mat_data.idx[i])[j], 1, MPI_INT, k, 0, MPI_COMM_WORLD);
+                    MPI_Send(&(*mat_data.val[i])[j], 1, MPI_DOUBLE, k, 0, MPI_COMM_WORLD);
+                }
+            }
+        }
+        for (int i = 0; i < vec_data.idx_size; ++i) {
+            for (int j = 0; j < vec_data.idx[i]->size(); ++j) {
+                for (int k = 0; k < comm_size; ++k) {
+                    MPI_Send(&i, 1, MPI_INT, k, 0, MPI_COMM_WORLD);
+                    MPI_Send(&(*vec_data.idx[i])[j], 1, MPI_INT, k, 0, MPI_COMM_WORLD);
+                    MPI_Send(&(*vec_data.val[i])[j], 1, MPI_DOUBLE, k, 0, MPI_COMM_WORLD);
+                }
+            }
+        }
+        /*
+         * distribute task
+         */
         vector<pair<int, int>> dis_row;
         int solv_size = mat_size[2] / comm_size;
         int beg_row = 0;
@@ -202,7 +234,8 @@ int main(int argc, char *argv[]) {
          * below to cal
          */
         printf("Rows :%d\n", mat_size[0]);
-        printf("Core %d for row :%d-%d\n", my_rank, my_rank * part, (my_rank + 1) * part);
+        printf("Core %d for row :%d-%d row_sum: %d\n", my_rank, dis_row[my_rank].first, dis_row[my_rank].second,
+               dis_row[my_rank].second - dis_row[my_rank].first);
         for (int row = own_beg_row; row < own_end_row; row++) {
             for (int inner = 0; inner < mat_data.idx[row]->size(); inner++) {
                 if (inner == 0) {
@@ -229,7 +262,7 @@ int main(int argc, char *argv[]) {
                 break;
         }
         printf("Time use : %lf\n", MPI_Wtime() - beg);
-//        save_mat("res_mat.mtx", res, mat_size[0], 1);
+        save_mat("A1_mat.mtx", res, mat_size[0], 1);
     }
     MPI_Finalize();
     return 0;
