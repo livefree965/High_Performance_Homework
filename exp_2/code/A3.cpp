@@ -140,9 +140,9 @@ int main(int argc, char *argv[]) {
         Mat_Data vec_data(vec_size[0], vec_size[0]);
         Mat_Data mat_data(mat_size[0], mat_size[0]);
         for (int i = 0; i < mat_size[2]; ++i) {
-            MPI_Recv(&row, 1, MPI_INT, 0, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-            MPI_Recv(&idx, 1, MPI_INT, 0, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-            MPI_Recv(&val, 1, MPI_DOUBLE, 0, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+            MPI_Scatter(&i, 1, MPI_INT, &row, 1, MPI_INT, 0, MPI_COMM_WORLD);
+            MPI_Scatter(NULL, 1, MPI_INT, &idx, 1, MPI_INT, 0, MPI_COMM_WORLD);
+            MPI_Scatter(NULL, 1, MPI_INT, &idx, 1, MPI_INT, 0, MPI_COMM_WORLD);
 //            cout << row << " " << idx << " " << val << endl;
             mat_data.idx[row]->push_back(idx);
             mat_data.val[row]->push_back(val);
@@ -189,11 +189,9 @@ int main(int argc, char *argv[]) {
         }
         for (int i = 0; i < mat_data.idx_size; ++i) {
             for (int j = 0; j < mat_data.idx[i]->size(); ++j) {
-                for (int k = 0; k < comm_size; ++k) {
-                    MPI_Send(&i, 1, MPI_INT, k, 0, MPI_COMM_WORLD);
-                    MPI_Send(&(*mat_data.idx[i])[j], 1, MPI_INT, k, 0, MPI_COMM_WORLD);
-                    MPI_Send(&(*mat_data.val[i])[j], 1, MPI_DOUBLE, k, 0, MPI_COMM_WORLD);
-                }
+                MPI_Scatter(&i, 1, MPI_INT, &row, 1, MPI_INT, 0, MPI_COMM_WORLD);
+                MPI_Scatter(&(*mat_data.idx[i])[j], 1, MPI_INT, &idx, 1, MPI_INT, 0, MPI_COMM_WORLD);
+                MPI_Scatter(&(*mat_data.val[i])[j], 1, MPI_INT, &idx, 1, MPI_INT, 0, MPI_COMM_WORLD);
             }
         }
         for (int i = 0; i < vec_data.idx_size; ++i) {
