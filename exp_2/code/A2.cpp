@@ -9,6 +9,8 @@
 #include <string.h>
 #include <mpi.h>
 #include <map>
+#include <pthread.h>
+#include <semaphore.h>
 
 using namespace std;
 
@@ -55,6 +57,18 @@ struct Mat_Data {
     }
 };
 
+struct File_para {
+    ifstream *file;
+    sem_t *semlock;
+    Mat_Data *mat_data;
+
+    File_para(ifstream *file_, sem_t *semlock_, Mat_Data *mat_data_) {
+        file = file_;
+        semlock = semlock_;
+        mat_data = mat_data_;
+    }
+};
+
 void generate_mat(const string &filename, int row, int col, int seed) {
     ofstream outfile;
     outfile.open(filename);
@@ -93,22 +107,42 @@ void update_info(const string &filename, int *res) {
     res[1] = mat_info[1];
 }
 
+void *get_mat_thread(void *params) {
+    File_para *file_para = (File_para *) params;
+    ifstream *infile = file_para->file;
+    sem_t *semlock = file_para->semlock;
+    Mat_Data *mat_data = file_para->mat_data;
+    char buffer[256];
+    int element[3];
+//    int now_row = 2;
+    sem_wait(semlock);
+    while (!infile->eof()) {
+        infile->getline(buffer, 256, '\n');
+        double data = get_element(buffer, element);
+        file_para->mat_data->idx[element[0] - 1]->push_back(element[1] - 1);
+        file_para->mat_data->val[element[0] - 1]->push_back(data);
+    }
+    sem_post(semlock);
+}
+
 Mat_Data get_mat(const string &filename) {
     ifstream infile;
+    sem_t semlock;
+    sem_init(&semlock, 0, 1);
     char buffer[256];
     int element[3];
     infile.open(filename);
     infile.getline(buffer, 256, '\n');
     element[2] = get_element(buffer, element);
-    struct Mat_Data mat_data(element[0], element[0]);
-    while (!infile.eof()) {
-        infile.getline(buffer, 256, '\n');
-        double data = get_element(buffer, element);
-        mat_data.idx[element[0] - 1]->push_back(element[1] - 1);
-        mat_data.val[element[0] - 1]->push_back(data);
+    const int thread_num = 16;
+    struct Mat_Data *mat_data = new Mat_Data(element[0], element[0]);
+    struct File_para *file_para = new File_para(&infile, &semlock, mat_data);
+    pthread_t threads[thread_num];
+    for (int i = 0; i < thread_num; ++i) {
+        pthread_create(&threads[i], NULL, get_mat_thread, (void *) file_para);
+        pthread_join(threads[i], NULL);
     }
-    infile.close();
-    return mat_data;
+    return *mat_data;
 }
 
 void save_mat(const string &filename, double *mat, int row, int col) {
