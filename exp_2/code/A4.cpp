@@ -123,6 +123,7 @@ void save_mat(const string &filename, double *mat, int row, int col) {
 }
 
 int main(int argc, char *argv[]) {
+    double beg = MPI_Wtime();
     // string mat_a = "mat_data.mtx";
     // string mat_b = "vec_data.mtx";
 //    generate_mat("test1_mat.mtx", 4, 5, 1);
@@ -151,7 +152,6 @@ int main(int argc, char *argv[]) {
 //    }
     int my_rank, comm_size;
     MPI_Init(&argc, &argv);
-    double beg = MPI_Wtime();
     MPI_Comm_rank(MPI_COMM_WORLD, &my_rank);
     MPI_Comm_size(MPI_COMM_WORLD, &comm_size);
     int part = mat_size[0] / comm_size;
