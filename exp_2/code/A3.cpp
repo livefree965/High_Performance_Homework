@@ -149,12 +149,14 @@ int main(int argc, char *argv[]) {
 
             }
         }
-        for (int i = 0; i < vec_size[2]; ++i) {
-            MPI_Scatter(&i, 1, MPI_INT, &row, 1, MPI_INT, 0, MPI_COMM_WORLD);
-            MPI_Scatter(NULL, 1, MPI_INT, &idx, 1, MPI_INT, 0, MPI_COMM_WORLD);
-            MPI_Scatter(NULL, 1, MPI_INT, &val, 1, MPI_INT, 0, MPI_COMM_WORLD);
-            vec_data.idx[row]->push_back(idx);
-            vec_data.val[row]->push_back(val);
+        for (int i = 0; i < vec_data.idx_size; ++i) {
+            for (int j = 0; j < vec_data.idx[i]->size(); ++j) {
+                MPI_Scatter(&i, 1, MPI_INT, &row, 1, MPI_INT, 0, MPI_COMM_WORLD);
+                MPI_Scatter(&(*vec_data.idx[i])[j], 1, MPI_INT, &idx, 1, MPI_INT, 0, MPI_COMM_WORLD);
+                MPI_Scatter(&(*vec_data.val[i])[j], 1, MPI_INT, &val, 1, MPI_INT, 0, MPI_COMM_WORLD);
+                vec_data.idx[row]->push_back(idx);
+                vec_data.val[row]->push_back(val);
+            }
         }
         res = new double[mat_size[0]];
 //        mat_data.show_array();
