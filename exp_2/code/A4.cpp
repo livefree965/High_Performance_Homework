@@ -201,8 +201,8 @@ int main(int argc, char *argv[]) {
         /*
          * below to cal
          */
-        printf("Rows :%d\n", mat_size[0]);
-        printf("Core %d for row :%d-%d\n", my_rank, my_rank * part, (my_rank + 1) * part);
+        printf("Rows :%d\n", mat_size[0] * 2);
+        printf("Core %d for row :%d-%d\n", my_rank, my_rank * part * 2, (my_rank + 1) * part * 2);
         for (int row = own_beg_row; row < own_end_row; row++) {
             for (int inner = 0; inner < mat_data.idx[row]->size(); inner++) {
                 if (inner == 0) {
@@ -213,8 +213,8 @@ int main(int argc, char *argv[]) {
             }
         }
         for (int i = 1; i < comm_size; i++) {
-            printf("Core %d for row :%d-%d row_sum: %d\n", i, dis_row[i].first, dis_row[i].second,
-                   dis_row[i].second - dis_row[i].first);
+            printf("Core %d for row :%d-%d row_sum: %d\n", i, dis_row[i].first * 2, dis_row[i].second * 2,
+                   (dis_row[i].second - dis_row[i].first) * 2);
             for (int row = dis_row[i].first; row < dis_row[i].second; row++) {
                 MPI_Recv(&res[row], 1, MPI_DOUBLE, i, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
             }

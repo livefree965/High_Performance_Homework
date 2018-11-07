@@ -60,11 +60,16 @@ void generate_mat(const string &filename, int row, int col, int seed) {
     outfile.open(filename);
     outfile << row << "\t" << col << "\t" << row * col << "\n";
     srand(seed);
+    int size = 0;
     for (int i = 0; i < row * col; i++) {
-        outfile << i / col + 1 << "\t" << i % col + 1 << "\t" << rand() % 10;
+        if (rand() % 4 != 0) {
+            size += 1;
+            outfile << i / col + 1 << "\t" << i % col + 1 << "\t" << rand() % 10;
+        }
         if (i != row * col - 1)
             outfile << "\n";
     }
+    cout << size << endl;
     outfile.close();
 }
 
@@ -122,6 +127,7 @@ void save_mat(const string &filename, double *mat, int row, int col) {
 }
 
 int main(int argc, char *argv[]) {
+    generate_mat("big_test_mat.mtx", 60222 * 2, 60222 * 2, 1);
     int my_rank, comm_size;
     int mat_size[3], vec_size[3];
     int row, idx;
