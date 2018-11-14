@@ -15,6 +15,7 @@
 #include <pthread.h>
 #include <semaphore.h>
 #include <iomanip>
+#include <memory.h>
 
 using namespace std;
 int Mat_size;
@@ -107,6 +108,20 @@ int *read_vec(int *res, int beg_row, int part_size, string filename) {
 
 int main(int argc, char *argv[]) {
     Mat_size = 16;
+//    int **mat1_data = read_mat(0, 0, Mat_size, "mat.data");
+//    int *vec1_data = new int[Mat_size];
+//    read_vec(vec1_data, 0, Mat_size, "vec.data");
+//    int *res1 = new int[Mat_size];
+//    for (int l = 0; l < Mat_size; ++l) {
+//        res1[l] = 0;
+//    }
+//    for (int i = 0; i < Mat_size; ++i) {
+//        for (int j = 0; j < Mat_size; ++j) {
+//            res1[i] += mat1_data[i][j] * vec1_data[j];
+//        }
+//    }
+//    show_vec(res1, Mat_size, "standard.mtx");
+
 //    int *tmp = read_vec(1, 2, "vec.data");
 //    int **all = read_mat(0, 0, Mat_size, "mat.data");
 //    show_mat(all, 16, "all.data");
@@ -135,21 +150,28 @@ int main(int argc, char *argv[]) {
     int **mat_data = read_mat(rankX * process_mat_size, rankY * process_mat_size, process_mat_size, "mat.data");
     int *vec_data = new int[process_mat_size];
     if (rankX == rankY) {
-        cout << my_rank << endl;
+//        cout << my_rank << endl;
         read_vec(vec_data, rankX * process_mat_size, process_mat_size, "vec.data");
-        cout << vec_data[0] << endl;
+//        cout << vec_data[0] << endl;
     }
     MPI_Bcast(vec_data, process_mat_size, MPI_INT, int(my_rank % process_mat_size), commX);
-    if (my_rank == 5) {
-//        cout << vec_data[0] << endl;
-        show_mat(mat_data, process_mat_size, "rank_5_mat");
-        show_vec(vec_data, process_mat_size, "rank_5_vec");
+    int *res = new int[process_mat_size];
+    int *res_sum = new int[process_mat_size];
+    int *all_sum = new int[Mat_size];
+    for (int k = 0; k < process_mat_size; ++k) {
+        res[k] = 0;
     }
-    if (my_rank == 1) {
-        show_mat(mat_data, process_mat_size, "rank_1_mat");
-        show_vec(vec_data, process_mat_size, "rank_1_vec");
+    for (int i = 0; i < process_mat_size; ++i) {
+        for (int j = 0; j < process_mat_size; ++j) {
+            res[i] += mat_data[i][j] * vec_data[j];
+        }
     }
-    printf("rank = %d;   X = %d;  Y = %d\n", my_rank, rankX, rankY);
+    MPI_Reduce(res, res_sum, process_mat_size, MPI_INT, MPI_SUM, 0, commY);
+    MPI_Gather(res_sum, process_mat_size, MPI_INT, all_sum, process_mat_size, MPI_INT, 0, commX);
+    if (my_rank == 0) {
+        show_vec(all_sum, Mat_size, "sum.mtx");
+    }
+//    printf("rank = %d;   X = %d;  Y = %d\n", my_rank, rankX, rankY);
 //    MPI_Comm top_comm;
 //    int Mat_size = int(sqrt(comm_size));
 //    int dims[2] = {Mat_size, Mat_size};
