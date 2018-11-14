@@ -76,9 +76,9 @@ int **read_mat(int beg_row, int beg_col, int part_size, string filename) {
 //    infile.seekg(11);
     int tmp[3];
     char data[Mat_size];
-    int **res = new int *[Mat_size];
-    for (int i = 0; i < Mat_size; ++i) {
-        res[i] = new int[Mat_size];
+    int **res = new int *[part_size];
+    for (int i = 0; i < part_size; ++i) {
+        res[i] = new int[part_size];
     }
     for (int i = 0; i < part_size; ++i) {
         infile.seekg(((beg_row + i) * Mat_size + beg_col) * Mat_size);
