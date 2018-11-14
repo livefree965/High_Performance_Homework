@@ -83,6 +83,10 @@ int **read_mat(int beg_row, int beg_col, int part_size, string filename) {
     for (int i = 0; i < part_size; ++i) {
         infile.seekg(((beg_row + i) * Mat_size + beg_col) * Mat_size);
         for (int j = 0; j < part_size; ++j) {
+            if (beg_row + i >= Mat_size || beg_col + j >= Mat_size) {
+                res[i][j] = 0;
+                continue;
+            }
             infile.getline(data, Mat_size);
             get_element(data, tmp);
             res[i][j] = tmp[2];
@@ -98,6 +102,10 @@ int *read_vec(int *res, int beg_row, int part_size, string filename) {
     int tmp[3];
     char data[Mat_size];
     for (int i = 0; i < part_size; ++i) {
+        if (beg_row + i >= Mat_size) {
+            res[i] = 0;
+            continue;
+        }
         infile.seekg((beg_row + i) * Row_char_count);
         infile.getline(data, Mat_size);
         get_element(data, tmp);
@@ -131,7 +139,6 @@ int main(int argc, char *argv[]) {
     int my_rank, comm_size;
     int rankX, rankY;
     int ndims = 2;
-    int dims[2] = {int(sqrt(Mat_size)), int(sqrt(Mat_size))};
     int periods[2] = {0, 0};
     int reorder = 0;
     int remainX[2] = {1, 0};
@@ -141,12 +148,19 @@ int main(int argc, char *argv[]) {
     MPI_Init(&argc, &argv);
     MPI_Comm_rank(MPI_COMM_WORLD, &my_rank);
     MPI_Comm_size(MPI_COMM_WORLD, &comm_size);
+    int dims[2] = {int(sqrt(comm_size)), int(sqrt(comm_size))};
+    int process_dim = dims[0];
     MPI_Cart_create(MPI_COMM_WORLD, ndims, dims, periods, reorder, &comm2d);
     MPI_Cart_sub(comm2d, remainX, &commX);
     MPI_Cart_sub(comm2d, remainY, &commY);
     MPI_Comm_rank(commX, &rankX);
     MPI_Comm_rank(commY, &rankY);
-    int process_mat_size = int(Mat_size / sqrt(comm_size));
+    int process_mat_size = 1;
+    while (process_mat_size * sqrt(comm_size) < Mat_size) {
+        process_mat_size++;
+    }
+//    Mat_size = process_mat_size * int(sqrt(comm_size));
+//    int process_mat_size = int(Mat_size / sqrt(comm_size));
     int **mat_data = read_mat(rankX * process_mat_size, rankY * process_mat_size, process_mat_size, "mat.data");
     int *vec_data = new int[process_mat_size];
     if (rankX == rankY) {
@@ -154,7 +168,7 @@ int main(int argc, char *argv[]) {
         read_vec(vec_data, rankX * process_mat_size, process_mat_size, "vec.data");
 //        cout << vec_data[0] << endl;
     }
-    MPI_Bcast(vec_data, process_mat_size, MPI_INT, int(my_rank % process_mat_size), commX);
+    MPI_Bcast(vec_data, process_mat_size, MPI_INT, int(my_rank % process_dim), commX);
     int *res = new int[process_mat_size];
     int *res_sum = new int[process_mat_size];
     int *all_sum = new int[Mat_size];
