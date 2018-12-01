@@ -93,25 +93,49 @@ int main(int argc, char *argv[]) {
     }
     //send pivot
 
-    int *pivots_index = new int[comm_size];
-    pivots_index[0] = 0;
+    int *pivots_sum = new int[comm_size];
+    pivots_sum[0] = 0;
     int find_pivot_index = 0;
     for (int i = 0; i < process_element_num; ++i) {
         if (datas[i] <= pivots[find_pivot_index])
-            pivots_index[find_pivot_index]++;
+            pivots_sum[find_pivot_index]++;
         else if (find_pivot_index == comm_size - 1)
-            pivots_index[comm_size - 1] = process_element_num - i + 1;
+            pivots_sum[comm_size - 1] = process_element_num - i + 1;
         else {
             find_pivot_index++;
-            pivots_index[find_pivot_index] = 1;
-        }
-    }
-    if (my_rank == 1) {
-        for (int i = 0; i < comm_size; ++i) {
-            cout << pivots_index[i] << endl;
+            pivots_sum[find_pivot_index] = 1;
         }
     }
 
+    int *pivots_newsum = new int[comm_size];
+    MPI_Alltoall(pivots_sum, 1, MPI_INT, pivots_newsum, 1, MPI_INT, MPI_COMM_WORLD);
+    int total_size = 0;
+    for (int i = 0; i < comm_size; ++i) {
+        total_size += pivots_newsum[i];
+    }
+    long *new_datas = new long[total_size];
+    int *senddisp = new int[comm_size];
+    int *recvdisp = new int[comm_size];
+    senddisp[0] = 0;
+    recvdisp[0] = 0;
+    for (int i = 1; i < comm_size; ++i) {
+        senddisp[i] = pivots_sum[i - 1] + senddisp[i - 1];
+        recvdisp[i] = pivots_newsum[i - 1] + recvdisp[i - 1];
+    }
+    MPI_Alltoallv(datas, pivots_sum, senddisp, MPI_LONG, new_datas, pivots_newsum, recvdisp, MPI_LONG,
+                  MPI_COMM_WORLD);
+    //redistribute data
+    
+    if (my_rank == 2) {
+        printf("pivots_sum %d %d %d\n", pivots_sum[0], pivots_sum[1], pivots_sum[2]);
+        printf("send disp %d %d %d\n", senddisp[0], senddisp[1], senddisp[2]);
+        printf("pivots_newsum %d %d %d\n", pivots_newsum[0], pivots_newsum[1], pivots_newsum[2]);
+        printf("recv disp %d %d %d\n", recvdisp[0], recvdisp[1], recvdisp[2]);
+        for (int i = 0; i < total_size; ++i) {
+            cout << new_datas[i] << endl;
+        }
+//            cout << pivots_sum[i] << endl;
+    }
 //    int gather_sample_size = comm_size * comm_size;
 //    cout << "hello" << endl;
     MPI_Finalize();
