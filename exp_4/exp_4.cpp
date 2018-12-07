@@ -50,7 +50,7 @@ int main(int argc, char *argv[]) {
     int element_num, process_element_num;
     FILE *fp = NULL;
 //    fp = fopen("/share/home/shared_dir/psrs_data", "rb");
-    fp = fopen("/share/home/16337259/CLionProjects/High_Performance_Homework/cmake-build-debug/test_data", "rb");
+    fp = fopen("/root/CLionProjects/High_Performance_Homework/cmake-build-debug/test_data", "rb");
     fread(&element_num, sizeof(long), 1, fp);
     //open file,read length
 
@@ -71,8 +71,8 @@ int main(int argc, char *argv[]) {
 
     long *sample_data = new long[comm_size];
     first_sample(datas, element_len, sample_data, element_num / (comm_size * comm_size));
-    printf("rank %d sample %d %d %d\n", my_rank, sample_data[0], sample_data[1], sample_data[2]);
-    printf("rank %d get %ld-%ld\n", my_rank, element_beg, element_end);
+//    printf("rank %d sample %ld %ld %ld\n", my_rank, sample_data[0], sample_data[1], sample_data[2]);
+//    printf("rank %d get %ld-%ld\n", my_rank, element_beg, element_end);
     //sort and get sample
 
 
@@ -88,9 +88,9 @@ int main(int argc, char *argv[]) {
     //sort and get pivot
 
     MPI_Bcast(pivots, comm_size - 1, MPI_LONG, 0, MPI_COMM_WORLD);
-    if (my_rank == 1) {
-        cout << "my pivots is " << pivots[0] << " " << pivots[1] << endl;
-    }
+//    if (my_rank == 1) {
+//        cout << "my pivots is " << pivots[0] << " " << pivots[1] << endl;
+//    }
     //send pivot
 
     int *pivots_sum = new int[comm_size];
@@ -125,14 +125,58 @@ int main(int argc, char *argv[]) {
     MPI_Alltoallv(datas, pivots_sum, senddisp, MPI_LONG, new_datas, pivots_newsum, recvdisp, MPI_LONG,
                   MPI_COMM_WORLD);
     //redistribute data
-    
-    if (my_rank == 2) {
-        printf("pivots_sum %d %d %d\n", pivots_sum[0], pivots_sum[1], pivots_sum[2]);
-        printf("send disp %d %d %d\n", senddisp[0], senddisp[1], senddisp[2]);
-        printf("pivots_newsum %d %d %d\n", pivots_newsum[0], pivots_newsum[1], pivots_newsum[2]);
-        printf("recv disp %d %d %d\n", recvdisp[0], recvdisp[1], recvdisp[2]);
-        for (int i = 0; i < total_size; ++i) {
-            cout << new_datas[i] << endl;
+    long *sort_new_datas = new long[total_size];
+    int *indexes = new int[comm_size];
+    int *partitionEnds = new int[comm_size];
+    memcpy(indexes, recvdisp, sizeof(int) * comm_size);
+    memcpy(partitionEnds, recvdisp + 1, sizeof(int) * (comm_size - 1));
+    partitionEnds[comm_size - 1] = total_size;
+//    sort(new_datas, new_datas + total_size);
+
+    for (int i = 0; i < total_size; ++i) {
+        long lowest = 9223372036854775807;
+        int ind = 0;
+        for (int j = 0; j < comm_size; ++j) {
+//            if (my_rank == 0)
+//                cout << "indexs[j]" << indexes[j] << endl;
+            if (indexes[j] < partitionEnds[j] && new_datas[indexes[j]] < lowest) {
+                lowest = new_datas[indexes[j]];
+                ind = j;
+            }
+        }
+        sort_new_datas[i] = lowest;
+        indexes[ind] += 1;
+    }
+    //merge_sort
+
+    int *subListSize = new int[comm_size];
+    MPI_Gather(&total_size, 1, MPI_INT, subListSize, 1, MPI_INT, 0, MPI_COMM_WORLD);
+    delete[]datas;
+    if (my_rank == 0) {
+        recvdisp[0] = 0;
+        for (int i = 1; i < comm_size; ++i) {
+            recvdisp[i] = subListSize[i - 1] + recvdisp[i - 1];
+        }
+        datas = new long[element_num];
+    }
+    MPI_Gatherv(sort_new_datas, total_size, MPI_LONG, datas, subListSize, recvdisp, MPI_LONG, 0, MPI_COMM_WORLD);
+    if (my_rank == 0) {
+//        printf("pivots_sum %d %d %d\n", pivots_sum[0], pivots_sum[1], pivots_sum[2]);
+//        printf("send disp %d %d %d\n", senddisp[0], senddisp[1], senddisp[2]);
+//        printf("pivots_newsum %d %d %d\n", pivots_newsum[0], pivots_newsum[1], pivots_newsum[2]);
+//        printf("recv disp %d %d %d\n", recvdisp[0], recvdisp[1], recvdisp[2]);
+//        for (int i = 0; i < total_size; ++i) {
+//            cout << partitionEnds[i] << endl;
+//        }
+//        for (int i = 0; i < comm_size; ++i) {
+//            cout << recvdisp[i] << endl;
+//        }
+//        for (int i = 0; i < comm_size; ++i) {
+//            cout << subListSize[i] << endl;
+//        }
+//        cout << element_num << endl;
+        for (int j = 0; j < element_num; ++j) {
+            cout << datas[j] << endl;
         }
 //            cout << pivots_sum[i] << endl;
     }
